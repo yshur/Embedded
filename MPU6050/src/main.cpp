@@ -1,3 +1,23 @@
+// ============================================================================
+// MPU6050 Accelerometer Visualization for ESP32 + WaveShare LCD
+// ============================================================================
+// This program reads acceleration data from an MPU6050 sensor and displays:
+//   1. X/Y Arrow: Shows direction and magnitude of tilt in the X/Y plane
+//   2. Z Arrow: Shows direction and magnitude of vertical (up/down) acceleration
+//   3. Temperature: Displays MPU6050 internal temperature in Celsius
+//
+// How it works:
+//   - Raw sensor data (ax, ay, az) is read from MPU6050 via I2C
+//   - Low-pass filter smooths the data to reduce jitter (fax, fay, faz)
+//   - Filtered values are scaled and converted to pixel positions
+//   - Arrows are drawn from center point (cx, cy) to calculated endpoints (px, py, zy)
+//   - Only redraws when movement exceeds threshold (prevents flicker)
+//
+// Coordinate system (MPU6050 chip facing up):
+//   +X = Right, +Y = Forward, +Z = Up
+//   At rest flat on table: ax≈0, ay≈0, az≈16384 (gravity = 1g)
+// ============================================================================
+
 #include <Arduino.h>
 #include "WaveShareDemo.h"   // LCD_Driver / LCD_GUI / LCD_Touch
 #include "I2Cdev.h"
@@ -9,6 +29,9 @@
     #include "Wire.h"
 #endif
 
+// ============================================================================
+// MPU6050 SENSOR VARIABLES
+// ============================================================================
 // class default I2C address is 0x68
 // specific I2C addresses may be passed as a parameter here
 // AD0 low = 0x68 (default for InvenSense evaluation board)
@@ -17,8 +40,10 @@ MPU6050 accelgyro;
 //MPU6050 accelgyro(0x69); // <-- use for AD0 high
 //MPU6050 accelgyro(0x68, &Wire1); // <-- use for AD0 low, but 2nd Wire (TWI/I2C) object
 
-int16_t ax, ay, az;
-int16_t gx, gy, gz;
+// Raw sensor readings (16-bit integers from MPU6050)
+// Range: ±16384 represents ±2g (where 1g = 9.8 m/s² = Earth's gravity)
+int16_t ax, ay, az;   // Accelerometer X, Y, Z axes
+int16_t gx, gy, gz;   // Gyroscope X, Y, Z axes (not currently used for display)
 
 // uncomment "OUTPUT_READABLE_ACCELGYRO" if you want to see a tab-separated
 // list of the accel X/Y/Z and then gyro X/Y/Z values in decimal. Easy to read,
@@ -35,22 +60,31 @@ int16_t gx, gy, gz;
 #define LED_PIN 13
 bool blinkState = false;
 
-// Low-pass filter to reduce jitter
-static float fax = 0, fay = 0, faz = 0;
-static const float ALPHA = 0.85f; // closer to 1 = more smoothing
+// ============================================================================
+// DISPLAY VARIABLES - Understanding the Calculations
+// ============================================================================
 
-// Previous positions for selective erasing
+// Low-pass filter variables (smooths sensor noise)
+// Formula: new_filtered = (ALPHA * old_filtered) + ((1-ALPHA) * new_raw)
+static float fax = 0, fay = 0, faz = 0;           // Filtered acceleration values (smoothed)
+static const float ALPHA = 0.85f;                  // Filter coefficient: 0.85 = keep 85% old, blend 15% new
+
+// Previous arrow positions (for selective redrawing - prevents flicker)
 static int prevPx = -9999, prevPy = -9999, prevZy = -9999;
-static const int MOVE_THRESH = 3;
+static const int MOVE_THRESH = 3;                  // Minimum pixel movement to trigger redraw
 
-// Screen dimensions and layout
-static int W, H, cx, cy;
-static int zx = 60;  // X position for Z axis display
-static int xyBoxLeft, xyBoxRight, xyBoxTop, xyBoxBottom;
+// Screen layout coordinates
+// cx, cy = center point where arrows originate (the "zero" position)
+// px, py = calculated endpoint for X/Y arrow (changes with tilt)
+// zy = calculated endpoint for Z arrow (changes with up/down orientation)
+static int W, H;                                   // Screen width and height
+static int cx, cy;                                 // Center coordinates for arrow origins
+static int zx = 60;                                // X position for Z axis display (left side)
+static int xyBoxLeft, xyBoxRight, xyBoxTop, xyBoxBottom;  // Boundaries for display areas
 
-// Temperature update counter
+// Temperature update timing
 static unsigned long lastTempUpdate = 0;
-static const unsigned long TEMP_UPDATE_INTERVAL = 1000; // Update temp every 1 second
+static const unsigned long TEMP_UPDATE_INTERVAL = 1000;  // Update temperature every 1 second
 
 // ---------------- Drawing helpers ----------------
 static int clampi(int v, int lo, int hi) {
@@ -116,10 +150,12 @@ void EraseArrowZ(int zx, int cy, int zy, COLOR color = WHITE) {
   int headLen = 10;
   int headWid = 6;
 
-  if (zy < cy) {
+  if (zy < cy) { // arrow was pointing up
+    // Erase arrowhead lines that were going back DOWN from tip
     GUI_DrawLine(zx, zy, zx - headWid, zy + headLen, color, LINE_SOLID, DOT_PIXEL_2X2);
     GUI_DrawLine(zx, zy, zx + headWid, zy + headLen, color, LINE_SOLID, DOT_PIXEL_2X2);
-  } else {
+  } else {       // arrow was pointing down
+    // Erase arrowhead lines that were going back UP from tip
     GUI_DrawLine(zx, zy, zx - headWid, zy - headLen, color, LINE_SOLID, DOT_PIXEL_2X2);
     GUI_DrawLine(zx, zy, zx + headWid, zy - headLen, color, LINE_SOLID, DOT_PIXEL_2X2);
   }
@@ -131,10 +167,12 @@ void DrawArrowZ(int zx, int cy, int zy) {
   int headLen = 10;
   int headWid = 6;
 
-  if (zy < cy) { // up
+  if (zy < cy) { // arrow pointing up
+    // Draw arrowhead lines going back DOWN from tip (converging /\ shape)
     GUI_DrawLine(zx, zy, zx - headWid, zy + headLen, RED, LINE_SOLID, DOT_PIXEL_2X2);
     GUI_DrawLine(zx, zy, zx + headWid, zy + headLen, RED, LINE_SOLID, DOT_PIXEL_2X2);
-  } else {       // down
+  } else {       // arrow pointing down
+    // Draw arrowhead lines going back UP from tip (converging /\ shape)
     GUI_DrawLine(zx, zy, zx - headWid, zy - headLen, RED, LINE_SOLID, DOT_PIXEL_2X2);
     GUI_DrawLine(zx, zy, zx + headWid, zy - headLen, RED, LINE_SOLID, DOT_PIXEL_2X2);
   }
@@ -161,9 +199,11 @@ void DrawStaticUI() {
   GUI_DisString_EN(cx + 5, xyBoxTop + 5, "Y", &Font12, WHITE, GRAY);
   GUI_DisString_EN(zx + 8, xyBoxTop + 5, "Z", &Font12, WHITE, GRAY);
 
-  // Center dots
-  GUI_DrawCircle(cx, cy, 3, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
-  GUI_DrawCircle(zx, cy, 3, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+  // Center dots (prominent markers showing origin points)
+  GUI_DrawCircle(cx, cy, 4, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+  GUI_DrawCircle(cx, cy, 2, WHITE, DRAW_FULL, DOT_PIXEL_1X1);
+  GUI_DrawCircle(zx, cy, 4, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+  GUI_DrawCircle(zx, cy, 2, WHITE, DRAW_FULL, DOT_PIXEL_1X1);
 }
 
 // ---------------- Setup / Loop ----------------
@@ -269,22 +309,40 @@ void loop() {
     digitalWrite(LED_PIN, blinkState);
 
     // Apply low-pass filter to smooth jitter
-    fax = ALPHA * fax + (1.0f - ALPHA) * ax;
-    fay = ALPHA * fay + (1.0f - ALPHA) * ay;
-    faz = ALPHA * faz + (1.0f - ALPHA) * az;
+    // Formula: new_filtered = (ALPHA * old_filtered) + ((1-ALPHA) * new_raw)
+    // ALPHA=0.85 means: keep 85% of old value, blend in 15% of new value
+    // This creates smooth transitions and reduces sensor noise
+    fax = ALPHA * fax + (1.0f - ALPHA) * ax;  // Filtered X acceleration
+    fay = ALPHA * fay + (1.0f - ALPHA) * ay;  // Filtered Y acceleration
+    faz = ALPHA * faz + (1.0f - ALPHA) * az;  // Filtered Z acceleration
 
     // Map acceleration to pixel positions
-    float scaleXY = 0.008f;  // Adjust for sensitivity
-    float scaleZ = 0.010f;
+    // scaleXY: converts raw acceleration units to pixels (adjust for arrow sensitivity)
+    // MPU6050 range: ±16384 = ±2g, so scaleXY=0.008 means ~130 pixels at max tilt
+    float scaleXY = 0.008f;  // Scale for X/Y display
+    float scaleZ = 0.010f;   // Scale for Z display (slightly more sensitive)
 
+    // Calculate arrow endpoint positions
+    // px: X position = center + (filtered_X_accel * scale)
+    //     - Tilt RIGHT (ax positive) → arrow moves RIGHT
+    //     - Tilt LEFT (ax negative) → arrow moves LEFT
     int px = cx + (int)(fax * scaleXY);
-    int py = cy - (int)(fay * scaleXY);  // Invert Y for screen coordinates
 
-    // Clamp to display bounds
+    // py: Y position = center - (filtered_Y_accel * scale)
+    //     - MINUS sign inverts Y because screen Y grows downward
+    //     - Tilt FORWARD (ay positive) → arrow points UP (smaller py)
+    //     - Tilt BACKWARD (ay negative) → arrow points DOWN (larger py)
+    int py = cy - (int)(fay * scaleXY);
+
+    // Clamp to display bounds (prevent drawing outside the box)
     px = clampi(px, xyBoxLeft + 5, xyBoxRight - 5);
     py = clampi(py, xyBoxTop + 5, xyBoxBottom - 5);
 
-    // Z axis position
+    // Calculate Z axis arrow position
+    // zy: Z position = center - (filtered_Z_accel * scale)
+    //     - Device FLAT/FACE-UP (az ≈ +16384) → arrow points UP (smaller zy)
+    //     - Device UPSIDE-DOWN (az ≈ -16384) → arrow points DOWN (larger zy)
+    //     - Device ON EDGE (az ≈ 0) → arrow near center
     int zy = cy - (int)(faz * scaleZ);
     zy = clampi(zy, xyBoxTop + 5, xyBoxBottom - 5);
 
@@ -292,28 +350,31 @@ void loop() {
     bool xyMoved = abs(px - prevPx) > MOVE_THRESH || abs(py - prevPy) > MOVE_THRESH;
     bool zMoved = abs(zy - prevZy) > MOVE_THRESH;
 
-    Serial.print("a/g:\t px=");
-    Serial.print(px); Serial.print("\t py=");
-    Serial.print(py); Serial.print("\t zy=");
-    Serial.print(zy); Serial.print("\t prevPx=");
-    Serial.print(prevPx); Serial.print("\t gy=");
-    Serial.print(gy); Serial.print("\t prevZy=");
-    Serial.println(prevZy);
-
     // Update arrows if they moved
     if (xyMoved) {
+      // Step 1: Erase old arrow with white
       EraseArrowXY(cx, cy, prevPx, prevPy);
+
+      // Step 2: Restore the axis lines (but not the center yet)
+      GUI_DrawLine(cx - 15, cy, cx + 15, cy, BLACK, LINE_SOLID, DOT_PIXEL_2X2);
+      GUI_DrawLine(cx, cy - 15, cx, cy + 15, BLACK, LINE_SOLID, DOT_PIXEL_2X2);
+
+      // Step 3: Draw new arrow
       DrawArrowXY(cx, cy, px, py);
 
-      // Redraw XY axes crossing point to fix any erasure
-      GUI_DrawLine(cx - 15, cy, cx + 15, cy, BLACK, LINE_SOLID, DOT_PIXEL_1X1);
-      GUI_DrawLine(cx, cy - 15, cx, cy + 15, BLACK, LINE_SOLID, DOT_PIXEL_1X1);
-      GUI_DrawCircle(cx, cy, 3, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+      // Step 4: Draw center point ON TOP of the arrow so it's always visible
+      // Use a filled circle that will show on top of the red arrow
+      GUI_DrawCircle(cx, cy, 4, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+      // Add a white center dot for better visibility
+      GUI_DrawCircle(cx, cy, 2, WHITE, DRAW_FULL, DOT_PIXEL_1X1);
 
       prevPx = px;
       prevPy = py;
 
       // Calculate and display magnitude
+      // magXY = vector magnitude in X/Y plane: sqrt(X² + Y²)
+      // Divide by ~16384 to convert to g's, but using 1000 for display scaling
+      // Result shows combined acceleration magnitude (e.g., 1.0g when tilted 45°)
       float magXY = sqrtf(fax * fax + fay * fay) / 1000.0f;  // in g's (approx)
       char buf[16];
       snprintf(buf, sizeof(buf), "%.2fg", magXY);
@@ -322,19 +383,35 @@ void loop() {
       GUI_DrawRectangle(xyBoxRight - 50, xyBoxBottom + 5, xyBoxRight, xyBoxBottom + 20,
                         WHITE, DRAW_FULL, DOT_PIXEL_1X1);
       GUI_DisString_EN(xyBoxRight - 48, xyBoxBottom + 7, buf, &Font12, WHITE, BLUE);
+
+      #ifdef OUTPUT_READABLE_ACCELGYRO
+        Serial.print("[XY moved] px=");
+        Serial.print(px); Serial.print(" py=");
+        Serial.print(py); Serial.print(" magXY=");
+        Serial.println(magXY);
+      #endif
     }
 
     if (zMoved) {
+      // Step 1: Erase old arrow with white
       EraseArrowZ(zx, cy, prevZy);
+
+      // Step 2: Restore the axis line (but not the center yet)
+      GUI_DrawLine(zx, cy - 15, zx, cy + 15, BLACK, LINE_SOLID, DOT_PIXEL_2X2);
+
+      // Step 3: Draw new arrow
       DrawArrowZ(zx, cy, zy);
 
-      // Redraw Z axis crossing point to fix any erasure
-      GUI_DrawLine(zx, cy - 15, zx, cy + 15, BLACK, LINE_SOLID, DOT_PIXEL_1X1);
-      GUI_DrawCircle(zx, cy, 3, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+      // Step 4: Draw center point ON TOP of the arrow so it's always visible
+      GUI_DrawCircle(zx, cy, 4, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
+      GUI_DrawCircle(zx, cy, 2, WHITE, DRAW_FULL, DOT_PIXEL_1X1);
 
       prevZy = zy;
 
       // Calculate and display Z magnitude
+      // magZ = Z acceleration component alone (not vector magnitude)
+      // Positive = facing up, Negative = facing down
+      // At rest flat on table: magZ ≈ +1.0g (gravity pulling down on sensor)
       float magZ = faz / 1000.0f;  // in g's (approx)
       char buf[16];
       snprintf(buf, sizeof(buf), "%.2fg", magZ);
@@ -343,6 +420,12 @@ void loop() {
       GUI_DrawRectangle(zx - 30, xyBoxBottom + 5, zx + 30, xyBoxBottom + 20,
                         WHITE, DRAW_FULL, DOT_PIXEL_1X1);
       GUI_DisString_EN(zx - 25, xyBoxBottom + 7, buf, &Font12, WHITE, BLUE);
+
+      #ifdef OUTPUT_READABLE_ACCELGYRO
+        Serial.print("[Z moved] zy=");
+        Serial.print(zy); Serial.print(" magZ=");
+        Serial.println(magZ);
+      #endif
     }
 
     // Update temperature periodically (not on every frame)
