@@ -1,297 +1,233 @@
+/*****************************************************************************
+ * | File        : WaveShareDemo.cpp
+ * | Function    : Demo functions using OOP LCD library
+ *****************************************************************************/
+
 #include <Arduino.h>
 #include "WaveShareDemo.h"
-#include "Debug.h"
 
 /******************************************************************************
-  function:	According to the display area adaptive display time
-  parameter:
-		xStart :   X direction Start coordinates
-		Ystart :   Y direction Start coordinates
-		Xend   :   X direction end coordinates
-		Yend   :   Y direction end coordinates
-		pTime  :   Pointer to the definition of the structure
-		Color  :   Set show color
-  note:
+  function:   According to the display area adaptive display time
 ******************************************************************************/
+void GUI_Showtime(WaveshareLCD& lcd, POINT xStart, POINT yStart,
+                  POINT xEnd, POINT yEnd, DevTime* pTime, COLOR color) {
+    uint8_t value[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+    sFONT* font = nullptr;
 
-void GUI_Showtime(POINT Xstart, POINT Ystart, POINT Xend, POINT Yend,
-                  DEV_TIME *pTime, COLOR Color)
-{
-  uint8_t value[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
-  sFONT *Font = NULL;
+    POINT dx = (xEnd - xStart) / 7;
+    POINT dy = yEnd - yStart;
+    font = lcd.getFontForSize(dx, dy);
 
-  //According to the display area adaptive font size
-  POINT Dx = (Xend - Xstart) / 7;//Determine the spacing between characters
-  POINT Dy = Yend - Ystart;      //determine the font size
-  Font = GUI_GetFontSize(Dx, Dy);
-  
-  if ((pTime->Sec % 10) < 10 && (pTime->Sec % 10) > 0) {
-    LCD_SetArea2Color(Xstart + Dx * 6, Ystart, Xend, Yend, WHITE);// xx:xx:x0
-  } else {
-    if ((pTime->Sec / 10) < 6 && (pTime->Sec / 10) > 0) {
-      LCD_SetArea2Color(Xstart + Dx * 5, Ystart, Xend, Yend, WHITE);// xx:xx:00
-    } else {//sec = 60
-      pTime->Min = pTime->Min + 1;
-      pTime->Sec = 0;
-      if ((pTime->Min % 10) < 10 && (pTime->Min % 10) > 0) {
-        LCD_SetArea2Color(Xstart + Dx * 3 + Dx / 2, Ystart, Xend, Yend, WHITE);// xx:x0:00
-      } else {
-        if ((pTime->Min / 10) < 6 && (pTime->Min / 10) > 0) {
-          LCD_SetArea2Color(Xstart + Dx * 2 + Dx / 2, Ystart, Xend, Yend, WHITE);// xx:00:00
-        } else {//min = 60
-          pTime->Hour =  pTime->Hour + 1;
-          pTime->Min = 0;
-          if ((pTime->Hour % 10) < 4 && (pTime->Hour % 10) > 0 && pTime->Hour < 24) {// x0:00:00
-            LCD_SetArea2Color(Xstart + Dx, Ystart, Xend, Yend, WHITE);
-          } else {
-            pTime->Hour = 0;
-            pTime->Min = 0;
-            pTime->Sec = 0;
-            LCD_SetArea2Color(Xstart, Ystart, Xend, Yend, WHITE);// 00:00:00
-          }
+    if ((pTime->sec % 10) < 10 && (pTime->sec % 10) > 0) {
+        lcd.fillArea(xStart + dx * 6, yStart, xEnd, yEnd, Colors::WHITE);
+    } else {
+        if ((pTime->sec / 10) < 6 && (pTime->sec / 10) > 0) {
+            lcd.fillArea(xStart + dx * 5, yStart, xEnd, yEnd, Colors::WHITE);
+        } else {
+            pTime->min = pTime->min + 1;
+            pTime->sec = 0;
+            if ((pTime->min % 10) < 10 && (pTime->min % 10) > 0) {
+                lcd.fillArea(xStart + dx * 3 + dx / 2, yStart, xEnd, yEnd, Colors::WHITE);
+            } else {
+                if ((pTime->min / 10) < 6 && (pTime->min / 10) > 0) {
+                    lcd.fillArea(xStart + dx * 2 + dx / 2, yStart, xEnd, yEnd, Colors::WHITE);
+                } else {
+                    pTime->hour = pTime->hour + 1;
+                    pTime->min = 0;
+                    if ((pTime->hour % 10) < 4 && (pTime->hour % 10) > 0 && pTime->hour < 24) {
+                        lcd.fillArea(xStart + dx, yStart, xEnd, yEnd, Colors::WHITE);
+                    } else {
+                        pTime->hour = 0;
+                        pTime->min = 0;
+                        pTime->sec = 0;
+                        lcd.fillArea(xStart, yStart, xEnd, yEnd, Colors::WHITE);
+                    }
+                }
+            }
         }
-      }
     }
-  }
 
-  //Write data into the cache
-  GUI_DisChar(Xstart                           , Ystart, value[pTime->Hour / 10], Font, FONT_BACKGROUND, Color);
-  GUI_DisChar(Xstart + Dx                      , Ystart, value[pTime->Hour % 10], Font, FONT_BACKGROUND, Color);
-  GUI_DisChar(Xstart + Dx  + Dx / 4 + Dx / 2   , Ystart, ':'                    , Font, FONT_BACKGROUND, Color);
-  GUI_DisChar(Xstart + Dx * 2 + Dx / 2         , Ystart, value[pTime->Min / 10] , Font, FONT_BACKGROUND, Color);
-  GUI_DisChar(Xstart + Dx * 3 + Dx / 2         , Ystart, value[pTime->Min % 10] , Font, FONT_BACKGROUND, Color);
-  GUI_DisChar(Xstart + Dx * 4 + Dx / 2 - Dx / 4, Ystart, ':'                    , Font, FONT_BACKGROUND, Color);
-  GUI_DisChar(Xstart + Dx * 5                  , Ystart, value[pTime->Sec / 10] , Font, FONT_BACKGROUND, Color);
-  GUI_DisChar(Xstart + Dx * 6                  , Ystart, value[pTime->Sec % 10] , Font, FONT_BACKGROUND, Color);
+    lcd.drawChar(xStart, yStart, value[pTime->hour / 10], font, FONT_BACKGROUND, color);
+    lcd.drawChar(xStart + dx, yStart, value[pTime->hour % 10], font, FONT_BACKGROUND, color);
+    lcd.drawChar(xStart + dx + dx / 4 + dx / 2, yStart, ':', font, FONT_BACKGROUND, color);
+    lcd.drawChar(xStart + dx * 2 + dx / 2, yStart, value[pTime->min / 10], font, FONT_BACKGROUND, color);
+    lcd.drawChar(xStart + dx * 3 + dx / 2, yStart, value[pTime->min % 10], font, FONT_BACKGROUND, color);
+    lcd.drawChar(xStart + dx * 4 + dx / 2 - dx / 4, yStart, ':', font, FONT_BACKGROUND, color);
+    lcd.drawChar(xStart + dx * 5, yStart, value[pTime->sec / 10], font, FONT_BACKGROUND, color);
+    lcd.drawChar(xStart + dx * 6, yStart, value[pTime->sec % 10], font, FONT_BACKGROUND, color);
 }
 
 /******************************************************************************
-  function:	GUI_Show
-  note:
-	Clear,
-	Draw Line,
-	Draw Rectangle,
-	Draw Rings,
-	Draw Olympic Rings,
-	Display String,
-	Show Pic
+  function:   GUI_Show - Demo of drawing capabilities
 ******************************************************************************/
-void GUI_Show(void)
-{
-  GUI_Clear(WHITE);
-  if (sLCD_DIS.LCD_Dis_Column > sLCD_DIS.LCD_Dis_Page) { //Horizontal screen display
+void GUI_Show(WaveshareLCD& lcd) {
+    lcd.clear(Colors::WHITE);
 
-    DEBUG("Draw Horizontal Lines\r\n");
-    GUI_DrawLine(0, 10, LCD_WIDTH, 10, RED, LINE_DOTTED, DOT_PIXEL_8X8);
-    GUI_DrawLine(0, 20, LCD_WIDTH, 20, RED, LINE_DOTTED, DOT_PIXEL_DFT);
-    GUI_DrawLine(0, 300, LCD_WIDTH, 300, RED, LINE_DOTTED, DOT_PIXEL_DFT);
-    GUI_DrawLine(0, 310, LCD_WIDTH, 310, RED, LINE_DOTTED, DOT_PIXEL_4X4);
+    LENGTH width = lcd.getWidth();
+    LENGTH height = lcd.getHeight();
 
-    DEBUG("Draw Rectangle\r\n");
-    GUI_DrawRectangle(10, 30, sLCD_DIS.LCD_Dis_Column - 10, sLCD_DIS.LCD_Dis_Page - 30, BLUE, DRAW_EMPTY, DOT_PIXEL_4X4);
-    GUI_DrawRectangle(20, 40, sLCD_DIS.LCD_Dis_Column - 20, 60, BLUE, DRAW_FULL, DOT_PIXEL_DFT);
+    if (width > height) {
+        // Horizontal screen display
+        Serial.println("Draw Horizontal Lines");
+        lcd.drawLine(0, 10, width, 10, Colors::RED, LineStyle::DOTTED, DotPixel::PX_8X8);
+        lcd.drawLine(0, 20, width, 20, Colors::RED, LineStyle::DOTTED, DOT_PIXEL_DEFAULT);
+        lcd.drawLine(0, 300, width, 300, Colors::RED, LineStyle::DOTTED, DOT_PIXEL_DEFAULT);
+        lcd.drawLine(0, 310, width, 310, Colors::RED, LineStyle::DOTTED, DotPixel::PX_4X4);
 
-    GUI_DrawRectangle(20, 65, sLCD_DIS.LCD_Dis_Column - 25, sLCD_DIS.LCD_Dis_Page - 40, MAGENTA, DRAW_EMPTY, DOT_PIXEL_6X6, LINE_DOTTED);
+        Serial.println("Draw Rectangle");
+        lcd.drawRectangle(10, 30, width - 10, height - 30, Colors::BLUE, DrawFill::EMPTY, DotPixel::PX_4X4);
+        lcd.drawRectangle(20, 40, width - 20, 60, Colors::BLUE, DrawFill::FULL, DOT_PIXEL_DEFAULT);
+        lcd.drawRectangle(20, 65, width - 25, height - 40, Colors::MAGENTA, DrawFill::EMPTY, DotPixel::PX_6X6, LineStyle::DOTTED);
 
-    DEBUG("Draw Olympic Rings\r\n");
-    uint16_t Cx1 = 190, Cy1 = 240, Cr = 20;
-    uint16_t Cx2 = Cx1 + (2.5 * Cr), Cy2 = Cy1;
-    uint16_t Cx3 = Cx1 + (5 * Cr), Cy3 = Cy1;
-    uint16_t Cx4 = ( Cx1 + Cx2 ) / 2, Cy4 = Cy1 + Cr;
-    uint16_t Cx5 = ( Cx2 + Cx3 ) / 2, Cy5 = Cy1 + Cr;
+        Serial.println("Draw Olympic Rings");
+        uint16_t cx1 = 190, cy1 = 240, cr = 20;
+        uint16_t cx2 = cx1 + (2.5 * cr), cy2 = cy1;
+        uint16_t cx3 = cx1 + (5 * cr), cy3 = cy1;
+        uint16_t cx4 = (cx1 + cx2) / 2, cy4 = cy1 + cr;
+        uint16_t cx5 = (cx2 + cx3) / 2, cy5 = cy1 + cr;
 
-    GUI_DrawCircle( Cx1, Cy1, Cr, BLUE, DRAW_EMPTY, DOT_PIXEL_3X3);
-    GUI_DrawCircle( Cx2, Cy2, Cr, BLACK, DRAW_EMPTY, DOT_PIXEL_3X3);
-    GUI_DrawCircle( Cx3, Cy3, Cr, RED, DRAW_EMPTY, DOT_PIXEL_3X3);
-    GUI_DrawCircle( Cx4, Cy4, Cr, YELLOW, DRAW_EMPTY, DOT_PIXEL_3X3);
-    GUI_DrawCircle( Cx5, Cy5, Cr, GREEN, DRAW_EMPTY, DOT_PIXEL_3X3);
+        lcd.drawCircle(cx1, cy1, cr, Colors::BLUE, DrawFill::EMPTY, DotPixel::PX_3X3);
+        lcd.drawCircle(cx2, cy2, cr, Colors::BLACK, DrawFill::EMPTY, DotPixel::PX_3X3);
+        lcd.drawCircle(cx3, cy3, cr, Colors::RED, DrawFill::EMPTY, DotPixel::PX_3X3);
+        lcd.drawCircle(cx4, cy4, cr, Colors::YELLOW, DrawFill::EMPTY, DotPixel::PX_3X3);
+        lcd.drawCircle(cx5, cy5, cr, Colors::GREEN, DrawFill::EMPTY, DotPixel::PX_3X3);
 
-    DEBUG("Draw Realistic circles\r\n");
-    GUI_DrawCircle(58, 250, 30, CYAN, DRAW_FULL, DOT_PIXEL_DFT);
-    GUI_DrawCircle(sLCD_DIS.LCD_Dis_Column - 55, 250, 30, CYAN, DRAW_EMPTY, DOT_PIXEL_4X4);
+        Serial.println("Draw Realistic circles");
+        lcd.drawCircle(58, 250, 30, Colors::CYAN, DrawFill::FULL, DOT_PIXEL_DEFAULT);
+        lcd.drawCircle(width - 55, 250, 30, Colors::CYAN, DrawFill::EMPTY, DotPixel::PX_4X4);
 
-    DEBUG("Display String\r\n");
-    GUI_DisString_EN(80, 80, "WaveShare Electronic", &Font24, LCD_BACKGROUND, BLUE);
-    GUI_DisString_EN(80, 120, "3.5inch TFTLCD", &Font20, YELLOW, BLUE);
+        Serial.println("Display String");
+        lcd.drawString(80, 80, "WaveShare Electronic", &Font24, LCD_BACKGROUND, Colors::BLUE);
+        lcd.drawString(80, 120, "3.5inch TFTLCD", &Font20, Colors::YELLOW, Colors::BLUE);
 
-    DEBUG("Display Nummber\r\n");
-    GUI_DisNum(80, 150, 1234567890, &Font16, LCD_BACKGROUND, BLUE);
+        Serial.println("Display Number");
+        lcd.drawNumber(80, 150, 1234567890, &Font16, LCD_BACKGROUND, Colors::BLUE);
 
-  } else { //Vertical screen display
+    } else {
+        // Vertical screen display
+        Serial.println("Draw Line");
+        lcd.drawLine(0, 10, width, 10, Colors::RED, LineStyle::SOLID, DotPixel::PX_2X2);
+        lcd.drawLine(0, 20, width, 20, Colors::RED, LineStyle::DOTTED, DOT_PIXEL_DEFAULT);
+        lcd.drawLine(0, height - 20, width, height - 20, Colors::RED, LineStyle::DOTTED, DOT_PIXEL_DEFAULT);
+        lcd.drawLine(0, height - 10, width, height - 10, Colors::RED, LineStyle::SOLID, DotPixel::PX_2X2);
 
-    DEBUG("Draw Line\r\n");
-    GUI_DrawLine(0, 10, sLCD_DIS.LCD_Dis_Column , 10, RED, LINE_SOLID, DOT_PIXEL_2X2);
-    GUI_DrawLine(0, 20, sLCD_DIS.LCD_Dis_Column , 20, RED, LINE_DOTTED, DOT_PIXEL_DFT);
-    GUI_DrawLine(0, sLCD_DIS.LCD_Dis_Page - 20, sLCD_DIS.LCD_Dis_Column , sLCD_DIS.LCD_Dis_Page - 20, RED, LINE_DOTTED, DOT_PIXEL_DFT);
-    GUI_DrawLine(0, sLCD_DIS.LCD_Dis_Page - 10, sLCD_DIS.LCD_Dis_Column , sLCD_DIS.LCD_Dis_Page - 10, RED, LINE_SOLID, DOT_PIXEL_2X2);
+        Serial.println("Draw Rectangle");
+        lcd.drawRectangle(10, 30, width - 10, height - 30, Colors::BLUE, DrawFill::EMPTY, DOT_PIXEL_DEFAULT);
+        lcd.drawRectangle(20, 40, width - 20, 60, Colors::BLUE, DrawFill::FULL, DOT_PIXEL_DEFAULT);
 
-    DEBUG("Draw Rectangle\r\n");
-    GUI_DrawRectangle(10, 30, sLCD_DIS.LCD_Dis_Column - 10, sLCD_DIS.LCD_Dis_Page - 30, BLUE, DRAW_EMPTY, DOT_PIXEL_DFT);
-    GUI_DrawRectangle(20, 40, sLCD_DIS.LCD_Dis_Column - 20, 60, BLUE, DRAW_FULL, DOT_PIXEL_DFT);
+        Serial.println("Draw Olympic Rings");
+        uint16_t cx1 = 120, cy1 = 300, cr = 20;
+        uint16_t cx2 = cx1 + (2.5 * cr), cy2 = cy1;
+        uint16_t cx3 = cx1 + (5 * cr), cy3 = cy1;
+        uint16_t cx4 = (cx1 + cx2) / 2, cy4 = cy1 + cr;
+        uint16_t cx5 = (cx2 + cx3) / 2, cy5 = cy1 + cr;
 
-    DEBUG("Draw Olympic Rings\r\n");
-    uint16_t Cx1 = 120, Cy1 = 300, Cr = 20;
-    uint16_t Cx2 = Cx1 + (2.5 * Cr), Cy2 = Cy1;
-    uint16_t Cx3 = Cx1 + (5 * Cr), Cy3 = Cy1;
-    uint16_t Cx4 = ( Cx1 + Cx2 ) / 2, Cy4 = Cy1 + Cr;
-    uint16_t Cx5 = ( Cx2 + Cx3 ) / 2, Cy5 = Cy1 + Cr;
+        lcd.drawCircle(cx1, cy1, cr, Colors::BLUE, DrawFill::EMPTY, DotPixel::PX_2X2);
+        lcd.drawCircle(cx2, cy2, cr, Colors::BLACK, DrawFill::EMPTY, DotPixel::PX_2X2);
+        lcd.drawCircle(cx3, cy3, cr, Colors::RED, DrawFill::EMPTY, DotPixel::PX_2X2);
+        lcd.drawCircle(cx4, cy4, cr, Colors::YELLOW, DrawFill::EMPTY, DotPixel::PX_2X2);
+        lcd.drawCircle(cx5, cy5, cr, Colors::GREEN, DrawFill::EMPTY, DotPixel::PX_2X2);
 
-    GUI_DrawCircle( Cx1, Cy1, Cr, BLUE, DRAW_EMPTY, DOT_PIXEL_2X2);
-    GUI_DrawCircle( Cx2, Cy2, Cr, BLACK, DRAW_EMPTY, DOT_PIXEL_2X2);
-    GUI_DrawCircle( Cx3, Cy3, Cr, RED, DRAW_EMPTY, DOT_PIXEL_2X2);
-    GUI_DrawCircle( Cx4, Cy4, Cr, YELLOW, DRAW_EMPTY, DOT_PIXEL_2X2);
-    GUI_DrawCircle( Cx5, Cy5, Cr, GREEN, DRAW_EMPTY, DOT_PIXEL_2X2);
+        Serial.println("Draw Realistic circles");
+        lcd.drawCircle(50, 400, 30, Colors::CYAN, DrawFill::FULL, DOT_PIXEL_DEFAULT);
+        lcd.drawCircle(width - 50, 400, 30, Colors::CYAN, DrawFill::FULL, DOT_PIXEL_DEFAULT);
 
-    DEBUG("Draw Realistic circles\r\n");
-    GUI_DrawCircle(50, 400, 30, CYAN, DRAW_FULL, DOT_PIXEL_DFT);
-    GUI_DrawCircle(sLCD_DIS.LCD_Dis_Column - 50, 400, 30, CYAN, DRAW_FULL, DOT_PIXEL_DFT);
+        Serial.println("Display String");
+        lcd.drawString(40, 120, "WaveShare Electronic", &Font24, LCD_BACKGROUND, Colors::BLUE);
+        lcd.drawString(40, 180, "3.5inch TFTLCD", &Font20, Colors::RED, Colors::BLUE);
 
-    DEBUG("Display String\r\n");
-    GUI_DisString_EN(40, 120, "WaveShare Electronic", &Font24, LCD_BACKGROUND, BLUE);
-    GUI_DisString_EN(40, 180, "3.5inch TFTLCD", &Font20, RED, BLUE);
-
-    DEBUG("Display Nummber\r\n");
-    GUI_DisNum(40, 210, 1234567890, &Font16, LCD_BACKGROUND, BLUE);
-
-  }
-}
-
-/*******************************************************************************
-  function:
-        Paint the Delete key and paint color choose area
-*******************************************************************************/
-void TP_Dialog(void)
-{
-  LCD_Clear(LCD_BACKGROUND);
-  DEBUG("Drawing...\r\n");
-  //Horizontal screen display
-  if (sLCD_DIS.LCD_Dis_Column > sLCD_DIS.LCD_Dis_Page) {
-    //Clear screen
-    GUI_DisString_EN(sLCD_DIS.LCD_Dis_Column - 60, 0,
-                     "CLEAR", &Font16, RED, BLUE);
-    //adjustment
-    GUI_DisString_EN(sLCD_DIS.LCD_Dis_Column - 120, 0,
-                     "AD", &Font24, RED, BLUE);
-    //choose the color
-    GUI_DrawRectangle(sLCD_DIS.LCD_Dis_Column - 50, 20,
-                      sLCD_DIS.LCD_Dis_Column, 70,
-                      BLUE, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(sLCD_DIS.LCD_Dis_Column - 50, 80,
-                      sLCD_DIS.LCD_Dis_Column, 130,
-                      GREEN, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(sLCD_DIS.LCD_Dis_Column - 50, 140,
-                      sLCD_DIS.LCD_Dis_Column, 190,
-                      RED, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(sLCD_DIS.LCD_Dis_Column - 50, 200,
-                      sLCD_DIS.LCD_Dis_Column, 250,
-                      YELLOW, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(sLCD_DIS.LCD_Dis_Column - 50, 260,
-                      sLCD_DIS.LCD_Dis_Column, 310,
-                      BLACK, DRAW_FULL, DOT_PIXEL_1X1);
-
-  } else { //Vertical screen display
-    GUI_DisString_EN(sLCD_DIS.LCD_Dis_Column - 60, 0,
-                     "CLEAR", &Font16, RED, BLUE);
-    GUI_DisString_EN(sLCD_DIS.LCD_Dis_Column - 120, 0,
-                     "AD", &Font24, RED, BLUE);
-    GUI_DrawRectangle(20, 20, 70, 70, BLUE, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(80, 20, 130, 70, GREEN, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(140, 20, 190, 70, RED, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(200, 20, 250, 70, YELLOW, DRAW_FULL, DOT_PIXEL_1X1);
-    GUI_DrawRectangle(260, 20, 310, 70, BLACK, DRAW_FULL, DOT_PIXEL_1X1);
-  }
-}
-
-/*******************************************************************************
-  function:
-        Draw Board
-*******************************************************************************/
-void TP_DrawBoard(void)
-{
-  //  sTP_DEV.chStatus &= ~(1 << 6);
-  TP_Scan(0);
-  if (sTP_DEV.chStatus & TP_PRESS_DOWN) {     //Press the button
-    //Horizontal screen
-    if (sTP_Draw.Xpoint < sLCD_DIS.LCD_Dis_Column &&
-        //Determine whether the law is legal
-        sTP_Draw.Ypoint < sLCD_DIS.LCD_Dis_Page) {
-      //Judgment is horizontal screen
-      if (sLCD_DIS.LCD_Dis_Column > sLCD_DIS.LCD_Dis_Page) {
-        if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 60) &&
-            sTP_Draw.Ypoint < 16) {     //Clear Board
-          TP_Dialog();
-        } else if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 120) &&
-                   sTP_Draw.Xpoint < (sLCD_DIS.LCD_Dis_Column - 80) &&
-                   sTP_Draw.Ypoint < 24) { //afresh adjustment
-          TP_Calibration();
-          TP_Dialog();
-        } else if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 50) &&
-                   sTP_Draw.Xpoint < sLCD_DIS.LCD_Dis_Column &&
-                   sTP_Draw.Ypoint > 20 &&
-                   sTP_Draw.Ypoint < 70) {
-          sTP_Draw.Color = BLUE;
-        } else if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 50) &&
-                   sTP_Draw.Xpoint < sLCD_DIS.LCD_Dis_Column &&
-                   sTP_Draw.Ypoint > 80 &&
-                   sTP_Draw.Ypoint < 130) {
-          sTP_Draw.Color = GREEN;
-        } else if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 50) &&
-                   sTP_Draw.Xpoint < sLCD_DIS.LCD_Dis_Column &&
-                   sTP_Draw.Ypoint > 140 &&
-                   sTP_Draw.Ypoint < 190) {
-          sTP_Draw.Color = RED;
-        } else if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 50) &&
-                   sTP_Draw.Xpoint < sLCD_DIS.LCD_Dis_Column &&
-                   sTP_Draw.Ypoint > 200 && sTP_Draw.Ypoint < 250) {
-          sTP_Draw.Color = YELLOW;
-        } else if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 50) &&
-                   sTP_Draw.Xpoint < sLCD_DIS.LCD_Dis_Column &&
-                   sTP_Draw.Ypoint > 260 &&
-                   sTP_Draw.Ypoint < 310) {
-          sTP_Draw.Color = BLACK;
-        } else {
-          GUI_DrawPoint(sTP_Draw.Xpoint, sTP_Draw.Ypoint,
-                        sTP_Draw.Color , DOT_PIXEL_1X1, DOT_FILL_RIGHTUP);
-          GUI_DrawPoint(sTP_Draw.Xpoint + 1, sTP_Draw.Ypoint,
-                        sTP_Draw.Color , DOT_PIXEL_1X1, DOT_FILL_RIGHTUP);
-          GUI_DrawPoint(sTP_Draw.Xpoint, sTP_Draw.Ypoint + 1,
-                        sTP_Draw.Color , DOT_PIXEL_1X1, DOT_FILL_RIGHTUP);
-          GUI_DrawPoint(sTP_Draw.Xpoint + 1, sTP_Draw.Ypoint + 1,
-                        sTP_Draw.Color , DOT_PIXEL_1X1, DOT_FILL_RIGHTUP);
-          GUI_DrawPoint(sTP_Draw.Xpoint, sTP_Draw.Ypoint,
-                        sTP_Draw.Color , DOT_PIXEL_2X2, DOT_FILL_RIGHTUP);
-        }
-        //Vertical screen
-      } else {
-        if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 60) &&
-            sTP_Draw.Ypoint < 16) {//Clear Board
-          TP_Dialog();
-        } else if (sTP_Draw.Xpoint > (sLCD_DIS.LCD_Dis_Column - 120) &&
-                   sTP_Draw.Xpoint < (sLCD_DIS.LCD_Dis_Column - 80) &&
-                   sTP_Draw.Ypoint < 24) { //afresh adjustment
-          TP_Calibration();
-          TP_Dialog();
-        } else if (sTP_Draw.Xpoint > 20 && sTP_Draw.Xpoint < 70 &&
-                   sTP_Draw.Ypoint > 20 && sTP_Draw.Ypoint < 70) {
-          sTP_Draw.Color = BLUE;
-        } else if (sTP_Draw.Xpoint > 80 && sTP_Draw.Xpoint < 130 &&
-                   sTP_Draw.Ypoint > 20 && sTP_Draw.Ypoint < 70) {
-          sTP_Draw.Color = GREEN;
-        } else if (sTP_Draw.Xpoint > 140 && sTP_Draw.Xpoint < 190 &&
-                   sTP_Draw.Ypoint > 20 && sTP_Draw.Ypoint < 70) {
-          sTP_Draw.Color = RED;
-        } else if (sTP_Draw.Xpoint > 200 && sTP_Draw.Xpoint < 250 &&
-                   sTP_Draw.Ypoint > 20 && sTP_Draw.Ypoint < 70) {
-          sTP_Draw.Color = YELLOW;
-        } else if (sTP_Draw.Xpoint > 260 && sTP_Draw.Xpoint < 310 &&
-                   sTP_Draw.Ypoint > 20 && sTP_Draw.Ypoint < 70) {
-          sTP_Draw.Color = BLACK;
-        } else {
-          GUI_DrawPoint(sTP_Draw.Xpoint, sTP_Draw.Ypoint,
-                        sTP_Draw.Color , DOT_PIXEL_2X2,
-                        DOT_FILL_RIGHTUP );
-        }
-      }
+        Serial.println("Display Number");
+        lcd.drawNumber(40, 210, 1234567890, &Font16, LCD_BACKGROUND, Colors::BLUE);
     }
-  }
+}
+
+/******************************************************************************
+  function:   Paint the Delete key and paint color choose area
+******************************************************************************/
+void TP_Dialog(WaveshareLCD& lcd) {
+    lcd.clear(LCD_BACKGROUND);
+    Serial.println("Drawing...");
+
+    LENGTH width = lcd.getWidth();
+    LENGTH height = lcd.getHeight();
+
+    if (width > height) {
+        // Horizontal screen display
+        lcd.drawString(width - 60, 0, "CLEAR", &Font16, Colors::RED, Colors::BLUE);
+        lcd.drawString(width - 120, 0, "AD", &Font24, Colors::RED, Colors::BLUE);
+
+        lcd.drawRectangle(width - 50, 20, width, 70, Colors::BLUE, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(width - 50, 80, width, 130, Colors::GREEN, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(width - 50, 140, width, 190, Colors::RED, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(width - 50, 200, width, 250, Colors::YELLOW, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(width - 50, 260, width, 310, Colors::BLACK, DrawFill::FULL, DotPixel::PX_1X1);
+    } else {
+        // Vertical screen display
+        lcd.drawString(width - 60, 0, "CLEAR", &Font16, Colors::RED, Colors::BLUE);
+        lcd.drawString(width - 120, 0, "AD", &Font24, Colors::RED, Colors::BLUE);
+
+        lcd.drawRectangle(20, 20, 70, 70, Colors::BLUE, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(80, 20, 130, 70, Colors::GREEN, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(140, 20, 190, 70, Colors::RED, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(200, 20, 250, 70, Colors::YELLOW, DrawFill::FULL, DotPixel::PX_1X1);
+        lcd.drawRectangle(260, 20, 310, 70, Colors::BLACK, DrawFill::FULL, DotPixel::PX_1X1);
+    }
+}
+
+/******************************************************************************
+  function:   Draw Board - touch paint application
+******************************************************************************/
+void TP_DrawBoard(WaveshareLCD& lcd, LCDTouch& touch) {
+    touch.scan();
+
+    if (!touch.isPressed()) return;
+
+    POINT x = touch.getX();
+    POINT y = touch.getY();
+    LENGTH width = lcd.getWidth();
+    LENGTH height = lcd.getHeight();
+
+    if (x >= width || y >= height) return;
+
+    if (width > height) {
+        // Horizontal screen
+        if (x > (width - 60) && y < 16) {
+            TP_Dialog(lcd);
+        } else if (x > (width - 120) && x < (width - 80) && y < 24) {
+            touch.calibrate();
+            TP_Dialog(lcd);
+        } else if (x > (width - 50) && x < width && y > 20 && y < 70) {
+            touch.setColor(Colors::BLUE);
+        } else if (x > (width - 50) && x < width && y > 80 && y < 130) {
+            touch.setColor(Colors::GREEN);
+        } else if (x > (width - 50) && x < width && y > 140 && y < 190) {
+            touch.setColor(Colors::RED);
+        } else if (x > (width - 50) && x < width && y > 200 && y < 250) {
+            touch.setColor(Colors::YELLOW);
+        } else if (x > (width - 50) && x < width && y > 260 && y < 310) {
+            touch.setColor(Colors::BLACK);
+        } else {
+            lcd.drawPoint(x, y, touch.getColor(), DotPixel::PX_2X2, DotStyle::FILL_RIGHTUP);
+        }
+    } else {
+        // Vertical screen
+        if (x > (width - 60) && y < 16) {
+            TP_Dialog(lcd);
+        } else if (x > (width - 120) && x < (width - 80) && y < 24) {
+            touch.calibrate();
+            TP_Dialog(lcd);
+        } else if (x > 20 && x < 70 && y > 20 && y < 70) {
+            touch.setColor(Colors::BLUE);
+        } else if (x > 80 && x < 130 && y > 20 && y < 70) {
+            touch.setColor(Colors::GREEN);
+        } else if (x > 140 && x < 190 && y > 20 && y < 70) {
+            touch.setColor(Colors::RED);
+        } else if (x > 200 && x < 250 && y > 20 && y < 70) {
+            touch.setColor(Colors::YELLOW);
+        } else if (x > 260 && x < 310 && y > 20 && y < 70) {
+            touch.setColor(Colors::BLACK);
+        } else {
+            lcd.drawPoint(x, y, touch.getColor(), DotPixel::PX_2X2, DotStyle::FILL_RIGHTUP);
+        }
+    }
 }
