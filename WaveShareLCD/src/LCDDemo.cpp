@@ -19,7 +19,7 @@ static Segment segments[3000];
 static int segCount = 0;
 
 // "touch on spiral" tolerance (pixels)
-static const int TOUCH_TOL = 4;
+static const int TOUCH_TOL = 10;  // Increased for easier detection
 
 // Line thickness
 static const DotPixel LINE_THICKNESS = DotPixel::PX_4X4;
@@ -90,40 +90,64 @@ static bool drawSpiralGrow(COLOR color) {
         right = clampi(right + step, 0, W-1);
         drawEdge(left, top, right, top, color);
 
-        touch.scan();
-        if (touch.wasJustPressed()) {
-            touch.clearPressedFlag();
-            if (isTouchOnSpiral(touch.getX(), touch.getY())) return false;
+        if (touch.scan()) {
+            int tx = touch.getX();
+            int ty = touch.getY();
+            bool onSpiral = isTouchOnSpiral(tx, ty);
+            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
+                          tx, ty, onSpiral ? "YES" : "NO");
+            if (onSpiral) {
+                Serial.println(">>> RESETTING SPIRAL <<<");
+                return false;
+            }
         }
 
         // bottom
         bottom = clampi(bottom + step, 0, H-1);
         drawEdge(right, top, right, bottom, color);
 
-        touch.scan();
-        if (touch.wasJustPressed()) {
-            touch.clearPressedFlag();
-            if (isTouchOnSpiral(touch.getX(), touch.getY())) return false;
+        if (touch.scan()) {
+            int tx = touch.getX();
+            int ty = touch.getY();
+            bool onSpiral = isTouchOnSpiral(tx, ty);
+            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
+                          tx, ty, onSpiral ? "YES" : "NO");
+            if (onSpiral) {
+                Serial.println(">>> RESETTING SPIRAL <<<");
+                return false;
+            }
         }
 
         // left
         left = clampi(left - step, 0, W-1);
         drawEdge(right, bottom, left, bottom, color);
 
-        touch.scan();
-        if (touch.wasJustPressed()) {
-            touch.clearPressedFlag();
-            if (isTouchOnSpiral(touch.getX(), touch.getY())) return false;
+        if (touch.scan()) {
+            int tx = touch.getX();
+            int ty = touch.getY();
+            bool onSpiral = isTouchOnSpiral(tx, ty);
+            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
+                          tx, ty, onSpiral ? "YES" : "NO");
+            if (onSpiral) {
+                Serial.println(">>> RESETTING SPIRAL <<<");
+                return false;
+            }
         }
 
         // top
         top = clampi(top - step, 0, H-1);
         drawEdge(left, bottom, left, top, color);
 
-        touch.scan();
-        if (touch.wasJustPressed()) {
-            touch.clearPressedFlag();
-            if (isTouchOnSpiral(touch.getX(), touch.getY())) return false;
+        if (touch.scan()) {
+            int tx = touch.getX();
+            int ty = touch.getY();
+            bool onSpiral = isTouchOnSpiral(tx, ty);
+            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
+                          tx, ty, onSpiral ? "YES" : "NO");
+            if (onSpiral) {
+                Serial.println(">>> RESETTING SPIRAL <<<");
+                return false;
+            }
         }
 
         step += stepInc;
@@ -142,13 +166,19 @@ static void drawSpiralShrink(COLOR bgColor) {
 
 void setup() {
     Serial.begin(115200);
+    delay(1000);  // Wait for Serial to initialize
+    Serial.println("=== WaveShareLCD Spiral Demo ===");
+    Serial.println("Touch the spiral to reset it!");
 
     // Initialize LCD with default scan direction and backlight
     lcd.begin(SCAN_DIR_DEFAULT, 200);
     lcd.clear(Colors::WHITE);
+    Serial.println("LCD initialized");
 
     // Initialize touch panel
     touch.begin();
+    Serial.println("Touch initialized");
+    Serial.println("Starting spiral...");
 }
 
 void loop() {
