@@ -16,6 +16,7 @@ enum class KeyType {
     EQUALS,     // =
     CLEAR,      // C/AC
     UNARY,      // x², √, sin, etc.
+    BACKSPACE,  // Delete last character
     NONE        // Placeholder/empty
 };
 

@@ -2,322 +2,493 @@
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
-
-// Note: DEG_TO_RAD is already defined in Arduino.h
+#include <ctype.h>
 
 CalculatorLogic::CalculatorLogic()
-    : _operand1(0.0)
-    , _operand2(0.0)
-    , _pendingOp(BinaryOp::NONE)
-    , _state(CalculatorState::FIRST_OPERAND)
-    , _hasDecimal(false)
+    : _showingResult(false)
+    , _isError(false)
 {
-    resetInput();
+    clearAll();
 }
 
-void CalculatorLogic::resetInput() {
-    _currentInput[0] = '0';
-    _currentInput[1] = '\0';
-    _hasDecimal = false;
+void CalculatorLogic::clearAll() {
+    _expression[0] = '0';
+    _expression[1] = '\0';
+    _result[0] = '\0';
+    _showingResult = false;
+    _isError = false;
 }
 
-double CalculatorLogic::getCurrentInputValue() const {
-    return atof(_currentInput);
+bool CalculatorLogic::lastCharIsOperator() const {
+    size_t len = strlen(_expression);
+    if (len == 0) return false;
+    char last = _expression[len - 1];
+    return (last == '+' || last == '-' || last == '*' || last == '/');
 }
 
-void CalculatorLogic::setDisplayFromValue(double value) {
-    // Handle special values
-    if (isnan(value) || isinf(value)) {
-        strcpy(_currentInput, "Error");
-        _state = CalculatorState::ERROR;
-        return;
-    }
-
-    // Format the number
-    // Try to display as integer if possible
-    if (value == floor(value) && fabs(value) < 1e10) {
-        snprintf(_currentInput, MAX_DISPLAY_LENGTH, "%.0f", value);
-    } else {
-        // Use scientific notation for very large/small numbers
-        if (fabs(value) >= 1e10 || (fabs(value) < 1e-6 && value != 0)) {
-            snprintf(_currentInput, MAX_DISPLAY_LENGTH, "%.4e", value);
-        } else {
-            snprintf(_currentInput, MAX_DISPLAY_LENGTH, "%.8g", value);
-        }
-    }
-
-    _hasDecimal = (strchr(_currentInput, '.') != nullptr);
-}
-
-void CalculatorLogic::appendToInput(char c) {
-    size_t len = strlen(_currentInput);
-
-    // Don't exceed max length
-    if (len >= MAX_DISPLAY_LENGTH - 1) return;
-
-    // Handle leading zero replacement
-    if (len == 1 && _currentInput[0] == '0' && c != '.') {
-        _currentInput[0] = c;
-        return;
-    }
-
-    _currentInput[len] = c;
-    _currentInput[len + 1] = '\0';
+bool CalculatorLogic::lastCharIsDot() const {
+    size_t len = strlen(_expression);
+    if (len == 0) return false;
+    return _expression[len - 1] == '.';
 }
 
 void CalculatorLogic::inputDigit(int digit) {
     if (digit < 0 || digit > 9) return;
 
-    // Clear error state on new input
-    if (_state == CalculatorState::ERROR) {
+    // If showing result, start fresh
+    if (_showingResult || _isError) {
         clearAll();
     }
 
-    // After showing result, start fresh
-    if (_state == CalculatorState::RESULT_SHOWN) {
-        clearAll();
+    size_t len = strlen(_expression);
+
+    // Replace initial "0" with the digit (unless it's "0.")
+    if (len == 1 && _expression[0] == '0') {
+        _expression[0] = '0' + digit;
+        return;
     }
 
-    // After operator, start new input
-    if (_state == CalculatorState::OPERATOR_ENTERED) {
-        resetInput();
-        _state = CalculatorState::SECOND_OPERAND;
-    }
+    // Don't exceed max length
+    if (len >= MAX_EXPR_LENGTH) return;
 
-    appendToInput('0' + digit);
+    _expression[len] = '0' + digit;
+    _expression[len + 1] = '\0';
 }
 
 void CalculatorLogic::inputDot() {
-    if (_state == CalculatorState::ERROR) {
+    if (_showingResult || _isError) {
         clearAll();
     }
 
-    if (_state == CalculatorState::RESULT_SHOWN) {
-        clearAll();
-    }
+    size_t len = strlen(_expression);
+    if (len >= MAX_EXPR_LENGTH) return;
 
-    if (_state == CalculatorState::OPERATOR_ENTERED) {
-        resetInput();
-        _state = CalculatorState::SECOND_OPERAND;
-    }
-
-    // Only add decimal if not already present
-    if (!_hasDecimal) {
-        appendToInput('.');
-        _hasDecimal = true;
-    }
-}
-
-void CalculatorLogic::applyBinaryOp(BinaryOp op) {
-    if (_state == CalculatorState::ERROR) return;
-
-    // If we already have a pending operation and second operand, execute first
-    if (_state == CalculatorState::SECOND_OPERAND && _pendingOp != BinaryOp::NONE) {
-        equals();
-        if (_state == CalculatorState::ERROR) return;
-    }
-
-    // Store current value as operand1
-    _operand1 = getCurrentInputValue();
-    _pendingOp = op;
-    _state = CalculatorState::OPERATOR_ENTERED;
-}
-
-void CalculatorLogic::applyBinaryOp(char opChar) {
-    BinaryOp op = BinaryOp::NONE;
-
-    switch (opChar) {
-        case '+': op = BinaryOp::ADD; break;
-        case '-': op = BinaryOp::SUBTRACT; break;
-        case '*': op = BinaryOp::MULTIPLY; break;
-        case '/': op = BinaryOp::DIVIDE; break;
-        case '%': op = BinaryOp::MODULO; break;
-        default: return;
-    }
-
-    applyBinaryOp(op);
-}
-
-double CalculatorLogic::executeOperation(double a, double b, BinaryOp op) {
-    switch (op) {
-        case BinaryOp::ADD:      return a + b;
-        case BinaryOp::SUBTRACT: return a - b;
-        case BinaryOp::MULTIPLY: return a * b;
-        case BinaryOp::DIVIDE:
-            if (b == 0.0) {
-                setError();
-                return 0.0;
-            }
-            return a / b;
-        case BinaryOp::MODULO:
-            if (b == 0.0) {
-                setError();
-                return 0.0;
-            }
-            return fmod(a, b);
-        default:
-            return a;
-    }
-}
-
-void CalculatorLogic::equals() {
-    if (_state == CalculatorState::ERROR) return;
-
-    if (_pendingOp == BinaryOp::NONE) {
-        // No operation pending, just show current value
-        _state = CalculatorState::RESULT_SHOWN;
+    // Don't allow dot after operator - add "0." instead
+    if (lastCharIsOperator() || len == 0) {
+        if (len + 2 > MAX_EXPR_LENGTH) return;
+        _expression[len] = '0';
+        _expression[len + 1] = '.';
+        _expression[len + 2] = '\0';
         return;
     }
 
-    // Get second operand
-    _operand2 = getCurrentInputValue();
+    // Check if current number already has a dot
+    // Scan backwards to find start of current number
+    bool hasDot = false;
+    for (int i = len - 1; i >= 0; i--) {
+        char c = _expression[i];
+        if (c == '+' || c == '-' || c == '*' || c == '/') break;
+        if (c == '.') {
+            hasDot = true;
+            break;
+        }
+    }
 
-    // Execute operation
-    double result = executeOperation(_operand1, _operand2, _pendingOp);
-
-    if (_state != CalculatorState::ERROR) {
-        setDisplayFromValue(result);
-        _operand1 = result;  // Store for chained operations
-        _pendingOp = BinaryOp::NONE;
-        _state = CalculatorState::RESULT_SHOWN;
+    if (!hasDot) {
+        _expression[len] = '.';
+        _expression[len + 1] = '\0';
     }
 }
 
-void CalculatorLogic::clearAll() {
-    _operand1 = 0.0;
-    _operand2 = 0.0;
-    _pendingOp = BinaryOp::NONE;
-    _state = CalculatorState::FIRST_OPERAND;
-    resetInput();
+void CalculatorLogic::inputOperator(char op) {
+    if (op != '+' && op != '-' && op != '*' && op != '/') return;
+
+    // If showing result, continue with that result
+    if (_showingResult) {
+        // Copy result to expression to continue calculating
+        strncpy(_expression, _result, MAX_EXPR_LENGTH);
+        _expression[MAX_EXPR_LENGTH] = '\0';
+        _showingResult = false;
+    }
+
+    if (_isError) {
+        clearAll();
+        return;
+    }
+
+    size_t len = strlen(_expression);
+    if (len >= MAX_EXPR_LENGTH) return;
+
+    // If last char is an operator, replace it
+    if (lastCharIsOperator()) {
+        _expression[len - 1] = op;
+        return;
+    }
+
+    // If last char is a dot, remove it first
+    if (lastCharIsDot()) {
+        _expression[len - 1] = op;
+        return;
+    }
+
+    // Don't allow operator at start (except for initial "0")
+    if (len == 0) return;
+
+    _expression[len] = op;
+    _expression[len + 1] = '\0';
 }
 
-void CalculatorLogic::clearEntry() {
-    resetInput();
+void CalculatorLogic::backspace() {
+    if (_showingResult || _isError) {
+        clearAll();
+        return;
+    }
+
+    size_t len = strlen(_expression);
+    if (len <= 1) {
+        _expression[0] = '0';
+        _expression[1] = '\0';
+        return;
+    }
+
+    _expression[len - 1] = '\0';
 }
 
-void CalculatorLogic::setError() {
-    strcpy(_currentInput, "Error");
-    _state = CalculatorState::ERROR;
+void CalculatorLogic::factorial() {
+    // First evaluate the current expression if not already showing result
+    if (!_showingResult && !_isError) {
+        equals();
+    }
+
+    if (_isError) return;
+
+    // Get the current result value
+    double value = atof(_result);
+
+    // Factorial only works for non-negative integers
+    if (value < 0 || value != floor(value)) {
+        strcpy(_result, "Error");
+        _isError = true;
+        return;
+    }
+
+    // Limit to prevent overflow (20! is near double max precision)
+    if (value > 170) {
+        strcpy(_result, "Error");
+        _isError = true;
+        return;
+    }
+
+    // Calculate factorial
+    int n = (int)value;
+    double fact = 1.0;
+    for (int i = 2; i <= n; i++) {
+        fact *= i;
+    }
+
+    formatResult(fact);
+    _showingResult = true;
 }
 
-// Unary operations
+void CalculatorLogic::log2() {
+    // First evaluate the current expression if not already showing result
+    if (!_showingResult && !_isError) {
+        equals();
+    }
+
+    if (_isError) return;
+
+    // Get the current result value
+    double value = atof(_result);
+
+    // log2 only works for positive numbers
+    if (value <= 0) {
+        strcpy(_result, "Error");
+        _isError = true;
+        return;
+    }
+
+    // Calculate log base 2: log2(x) = ln(x) / ln(2)
+    double result = log(value) / log(2.0);
+
+    formatResult(result);
+    _showingResult = true;
+}
 
 void CalculatorLogic::square() {
-    if (_state == CalculatorState::ERROR) return;
+    // First evaluate the current expression if not already showing result
+    if (!_showingResult && !_isError) {
+        equals();
+    }
 
-    double value = getCurrentInputValue();
+    if (_isError) return;
+
+    double value = atof(_result);
     double result = value * value;
-    setDisplayFromValue(result);
 
-    if (_state == CalculatorState::FIRST_OPERAND ||
-        _state == CalculatorState::RESULT_SHOWN) {
-        _operand1 = result;
-    }
-    _state = CalculatorState::RESULT_SHOWN;
-}
-
-void CalculatorLogic::squareRoot() {
-    if (_state == CalculatorState::ERROR) return;
-
-    double value = getCurrentInputValue();
-    if (value < 0) {
-        setError();
-        return;
-    }
-
-    double result = sqrt(value);
-    setDisplayFromValue(result);
-
-    if (_state == CalculatorState::FIRST_OPERAND ||
-        _state == CalculatorState::RESULT_SHOWN) {
-        _operand1 = result;
-    }
-    _state = CalculatorState::RESULT_SHOWN;
+    formatResult(result);
+    _showingResult = true;
 }
 
 void CalculatorLogic::sine() {
-    if (_state == CalculatorState::ERROR) return;
-
-    double value = getCurrentInputValue();
-    double result = sin(value * DEG_TO_RAD);
-    setDisplayFromValue(result);
-
-    if (_state == CalculatorState::FIRST_OPERAND ||
-        _state == CalculatorState::RESULT_SHOWN) {
-        _operand1 = result;
+    // First evaluate the current expression if not already showing result
+    if (!_showingResult && !_isError) {
+        equals();
     }
-    _state = CalculatorState::RESULT_SHOWN;
+
+    if (_isError) return;
+
+    double value = atof(_result);
+    // Convert degrees to radians and calculate sin
+    double result = sin(value * DEG_TO_RAD);
+
+    formatResult(result);
+    _showingResult = true;
 }
 
 void CalculatorLogic::cosine() {
-    if (_state == CalculatorState::ERROR) return;
-
-    double value = getCurrentInputValue();
-    double result = cos(value * DEG_TO_RAD);
-    setDisplayFromValue(result);
-
-    if (_state == CalculatorState::FIRST_OPERAND ||
-        _state == CalculatorState::RESULT_SHOWN) {
-        _operand1 = result;
+    // First evaluate the current expression if not already showing result
+    if (!_showingResult && !_isError) {
+        equals();
     }
-    _state = CalculatorState::RESULT_SHOWN;
+
+    if (_isError) return;
+
+    double value = atof(_result);
+    // Convert degrees to radians and calculate cos
+    double result = cos(value * DEG_TO_RAD);
+
+    formatResult(result);
+    _showingResult = true;
 }
 
 void CalculatorLogic::tangent() {
-    if (_state == CalculatorState::ERROR) return;
+    // First evaluate the current expression if not already showing result
+    if (!_showingResult && !_isError) {
+        equals();
+    }
 
-    double value = getCurrentInputValue();
+    if (_isError) return;
+
+    double value = atof(_result);
+
     // Check for undefined tangent (90, 270, etc.)
     double normalized = fmod(value, 180.0);
     if (fabs(normalized - 90.0) < 0.0001 || fabs(normalized + 90.0) < 0.0001) {
-        setError();
+        strcpy(_result, "Error");
+        _isError = true;
         return;
     }
 
+    // Convert degrees to radians and calculate tan
     double result = tan(value * DEG_TO_RAD);
-    setDisplayFromValue(result);
 
-    if (_state == CalculatorState::FIRST_OPERAND ||
-        _state == CalculatorState::RESULT_SHOWN) {
-        _operand1 = result;
-    }
-    _state = CalculatorState::RESULT_SHOWN;
+    formatResult(result);
+    _showingResult = true;
 }
 
 void CalculatorLogic::negate() {
-    if (_state == CalculatorState::ERROR) return;
+    // For negate, we work directly on the expression or result
+    if (_isError) {
+        clearAll();
+        return;
+    }
 
-    // Handle the special case of "0"
-    if (strcmp(_currentInput, "0") == 0) return;
-
-    // Toggle sign
-    if (_currentInput[0] == '-') {
-        // Remove minus sign
-        memmove(_currentInput, _currentInput + 1, strlen(_currentInput));
+    if (_showingResult) {
+        // Negate the result
+        double value = atof(_result);
+        value = -value;
+        formatResult(value);
     } else {
-        // Add minus sign
-        size_t len = strlen(_currentInput);
-        if (len < MAX_DISPLAY_LENGTH - 1) {
-            memmove(_currentInput + 1, _currentInput, len + 1);
-            _currentInput[0] = '-';
+        // Negate the expression or current number
+        size_t len = strlen(_expression);
+
+        if (len == 0) return;
+
+        // If expression starts with minus, remove it
+        if (_expression[0] == '-') {
+            memmove(_expression, _expression + 1, len);
+        }
+        // If expression is just "0", do nothing
+        else if (len == 1 && _expression[0] == '0') {
+            return;
+        }
+        // Otherwise, add minus at the beginning
+        else {
+            if (len < MAX_EXPR_LENGTH) {
+                memmove(_expression + 1, _expression, len + 1);
+                _expression[0] = '-';
+            }
         }
     }
 }
 
-void CalculatorLogic::percent() {
-    if (_state == CalculatorState::ERROR) return;
+void CalculatorLogic::equals() {
+    if (_showingResult) return;  // Already showing result
+    if (_isError) {
+        clearAll();
+        return;
+    }
 
-    double value = getCurrentInputValue();
-    double result = value / 100.0;
-    setDisplayFromValue(result);
+    // Remove trailing operator if any
+    size_t len = strlen(_expression);
+    while (len > 0 && lastCharIsOperator()) {
+        _expression[len - 1] = '\0';
+        len--;
+    }
 
-    if (_state == CalculatorState::FIRST_OPERAND ||
-        _state == CalculatorState::RESULT_SHOWN) {
-        _operand1 = result;
+    if (len == 0) {
+        clearAll();
+        return;
+    }
+
+    bool success = true;
+    double result = evaluate(_expression, success);
+
+    if (success) {
+        formatResult(result);
+        _showingResult = true;
+    } else {
+        strcpy(_result, "Error");
+        _isError = true;
+        _showingResult = true;
     }
 }
 
 const char* CalculatorLogic::getDisplayValue() const {
-    // Return current input buffer
-    return _currentInput;
+    if (_showingResult || _isError) {
+        return _result;
+    }
+    return _expression;
+}
+
+void CalculatorLogic::formatResult(double value) {
+    // Handle special values
+    if (isnan(value) || isinf(value)) {
+        strcpy(_result, "Error");
+        _isError = true;
+        return;
+    }
+
+    // Format the number
+    if (value == floor(value) && fabs(value) < 1e10) {
+        snprintf(_result, MAX_EXPR_LENGTH, "%.0f", value);
+    } else if (fabs(value) >= 1e10 || (fabs(value) < 1e-6 && value != 0)) {
+        snprintf(_result, MAX_EXPR_LENGTH, "%.4e", value);
+    } else {
+        snprintf(_result, MAX_EXPR_LENGTH, "%.8g", value);
+    }
+}
+
+// ============ Expression Parser with Operator Precedence ============
+// Uses recursive descent parsing:
+// Expression = Term (('+' | '-') Term)*
+// Term = Number (('*' | '/') Number)*
+// Number = [0-9]+ ('.' [0-9]+)?
+
+double CalculatorLogic::evaluate(const char* expr, bool& success) {
+    const char* p = expr;
+    success = true;
+    double result = parseExpression(p, success);
+
+    // Check if we consumed the entire expression
+    if (success && *p != '\0') {
+        success = false;
+    }
+
+    return result;
+}
+
+// Skip whitespace (shouldn't be any, but just in case)
+static void skipSpaces(const char*& p) {
+    while (*p == ' ') p++;
+}
+
+double CalculatorLogic::parseNumber(const char*& p, bool& success) {
+    skipSpaces(p);
+
+    if (!success) return 0;
+
+    // Handle negative numbers at start or after operator
+    bool negative = false;
+    if (*p == '-') {
+        negative = true;
+        p++;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    if (!isdigit(*p) && *p != '.') {
+        success = false;
+        return 0;
+    }
+
+    double value = 0;
+
+    // Integer part
+    while (isdigit(*p)) {
+        value = value * 10 + (*p - '0');
+        p++;
+    }
+
+    // Decimal part
+    if (*p == '.') {
+        p++;
+        double decimal = 0.1;
+        while (isdigit(*p)) {
+            value += (*p - '0') * decimal;
+            decimal *= 0.1;
+            p++;
+        }
+    }
+
+    return negative ? -value : value;
+}
+
+double CalculatorLogic::parseTerm(const char*& p, bool& success) {
+    double left = parseNumber(p, success);
+    if (!success) return 0;
+
+    skipSpaces(p);
+
+    while (*p == '*' || *p == '/') {
+        char op = *p;
+        p++;
+        skipSpaces(p);
+
+        double right = parseNumber(p, success);
+        if (!success) return 0;
+
+        if (op == '*') {
+            left *= right;
+        } else {
+            if (right == 0) {
+                success = false;  // Division by zero
+                return 0;
+            }
+            left /= right;
+        }
+
+        skipSpaces(p);
+    }
+
+    return left;
+}
+
+double CalculatorLogic::parseExpression(const char*& p, bool& success) {
+    skipSpaces(p);
+
+    double left = parseTerm(p, success);
+    if (!success) return 0;
+
+    skipSpaces(p);
+
+    while (*p == '+' || *p == '-') {
+        char op = *p;
+        p++;
+        skipSpaces(p);
+
+        double right = parseTerm(p, success);
+        if (!success) return 0;
+
+        if (op == '+') {
+            left += right;
+        } else {
+            left -= right;
+        }
+
+        skipSpaces(p);
+    }
+
+    return left;
 }

@@ -27,6 +27,11 @@ namespace ButtonColors {
     constexpr uint16_t EQUALS_BG = 0x07E0;     // Green
     constexpr uint16_t EQUALS_FG = Colors::WHITE;
     constexpr uint16_t EQUALS_PRESSED = 0x05C0;// Dark green
+
+    // Backspace button - blue
+    constexpr uint16_t BACK_BG = 0x001F;       // Blue
+    constexpr uint16_t BACK_FG = Colors::WHITE;
+    constexpr uint16_t BACK_PRESSED = 0x0010;  // Dark blue
 }
 
 Keyboard::Keyboard()
@@ -47,41 +52,41 @@ void Keyboard::initLayout(int16_t screenWidth, int16_t screenHeight, int16_t top
 
     using namespace ButtonColors;
 
-    // Row 0: C, √, x², /
-    createButton(0, 0, "C",  KeyType::CLEAR,    CLEAR_BG, CLEAR_FG, CLEAR_PRESSED);
-    createButton(0, 1, "^",  KeyType::UNARY,    FUNC_BG,  FUNC_FG,  FUNC_PRESSED);  // sqrt symbol
-    createButton(0, 2, "x2", KeyType::UNARY,    FUNC_BG,  FUNC_FG,  FUNC_PRESSED);  // x squared
-    createButton(0, 3, "/",  KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
+    // Row 0: C, log2, x², DEL (backspace)
+    createButton(0, 0, "C",    KeyType::CLEAR,     CLEAR_BG, CLEAR_FG, CLEAR_PRESSED);
+    createButton(0, 1, "log2", KeyType::UNARY,     FUNC_BG,  FUNC_FG,  FUNC_PRESSED);
+    createButton(0, 2, "x2",   KeyType::UNARY,     FUNC_BG,  FUNC_FG,  FUNC_PRESSED);
+    createButton(0, 3, "DEL",  KeyType::BACKSPACE, BACK_BG,  BACK_FG,  BACK_PRESSED);
 
-    // Row 1: 7, 8, 9, *
+    // Row 1: 7, 8, 9, /
     createButton(1, 0, "7",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
     createButton(1, 1, "8",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
     createButton(1, 2, "9",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
-    createButton(1, 3, "*",  KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
+    createButton(1, 3, "/",  KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
 
-    // Row 2: 4, 5, 6, -
+    // Row 2: 4, 5, 6, *
     createButton(2, 0, "4",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
     createButton(2, 1, "5",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
     createButton(2, 2, "6",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
-    createButton(2, 3, "-",  KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
+    createButton(2, 3, "*",  KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
 
-    // Row 3: 1, 2, 3, +
+    // Row 3: 1, 2, 3, -
     createButton(3, 0, "1",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
     createButton(3, 1, "2",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
     createButton(3, 2, "3",  KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
-    createButton(3, 3, "+",  KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
+    createButton(3, 3, "-",  KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
 
-    // Row 4: sin, 0, ., =
-    createButton(4, 0, "sin", KeyType::UNARY,   FUNC_BG,  FUNC_FG,  FUNC_PRESSED);
-    createButton(4, 1, "0",   KeyType::DIGIT,   DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
-    createButton(4, 2, ".",   KeyType::DOT,     DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
-    createButton(4, 3, "=",   KeyType::EQUALS,  EQUALS_BG, EQUALS_FG, EQUALS_PRESSED);
+    // Row 4: sin, 0, ., +
+    createButton(4, 0, "sin", KeyType::UNARY,    FUNC_BG,  FUNC_FG,  FUNC_PRESSED);
+    createButton(4, 1, "0",   KeyType::DIGIT,    DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
+    createButton(4, 2, ".",   KeyType::DOT,      DIGIT_BG, DIGIT_FG, DIGIT_PRESSED);
+    createButton(4, 3, "+",   KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
 
-    // Row 5: cos, tan, +/-, %
-    createButton(5, 0, "cos", KeyType::UNARY,    FUNC_BG,  FUNC_FG,  FUNC_PRESSED);
-    createButton(5, 1, "tan", KeyType::UNARY,    FUNC_BG,  FUNC_FG,  FUNC_PRESSED);
-    createButton(5, 2, "+/-", KeyType::UNARY,    FUNC_BG,  FUNC_FG,  FUNC_PRESSED);
-    createButton(5, 3, "%",   KeyType::OPERATOR, OP_BG,    OP_FG,    OP_PRESSED);
+    // Row 5: cos, tan, !, =
+    createButton(5, 0, "cos", KeyType::UNARY,   FUNC_BG,   FUNC_FG,   FUNC_PRESSED);
+    createButton(5, 1, "tan", KeyType::UNARY,   FUNC_BG,   FUNC_FG,   FUNC_PRESSED);
+    createButton(5, 2, "!",   KeyType::UNARY,   FUNC_BG,   FUNC_FG,   FUNC_PRESSED);  // factorial
+    createButton(5, 3, "=",   KeyType::EQUALS,  EQUALS_BG, EQUALS_FG, EQUALS_PRESSED);
 }
 
 void Keyboard::createButton(int row, int col, const char* label, KeyType type,

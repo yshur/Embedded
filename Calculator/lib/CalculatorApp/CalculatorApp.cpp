@@ -86,19 +86,25 @@ void CalculatorApp::loopStep() {
 
     // Check for touch
     if (_lcd.readTouch(tx, ty)) {
+        Serial.printf("[TOUCH] Detected at (%d, %d)\n", tx, ty);
+
         // Debounce
         unsigned long now = millis();
         if (now - _lastTouchTime < TOUCH_DEBOUNCE_MS) {
+            Serial.println("[TOUCH] Debounced - ignoring");
             return;
         }
         _lastTouchTime = now;
 
         if (!_waitingForRelease) {
             handleTouch(tx, ty);
+        } else {
+            Serial.println("[TOUCH] Waiting for release - ignoring");
         }
     } else {
         // Touch released
         if (_waitingForRelease && _lastPressedButton >= 0) {
+            Serial.printf("[TOUCH] Released - redrawing button %d\n", _lastPressedButton);
             // Redraw button in normal state
             _keyboard.drawButton(_lcd, _lastPressedButton, false);
             _lastPressedButton = -1;
@@ -112,6 +118,9 @@ void CalculatorApp::handleTouch(int16_t tx, int16_t ty) {
     int buttonIndex = _keyboard.hitTest(tx, ty);
 
     if (buttonIndex >= 0) {
+        const Button& btn = _keyboard.getButton(buttonIndex);
+        Serial.printf("[BUTTON] Hit button %d: '%s'\n", buttonIndex, btn.getLabel());
+
         // Animate button press
         animateButtonPress(buttonIndex);
 
@@ -120,10 +129,13 @@ void CalculatorApp::handleTouch(int16_t tx, int16_t ty) {
 
         // Update display
         drawDisplay();
+        Serial.printf("[DISPLAY] Value: %s\n", _logic.getDisplayValue());
 
         // Mark that we're waiting for release
         _waitingForRelease = true;
         _lastPressedButton = buttonIndex;
+    } else {
+        Serial.printf("[BUTTON] No button at (%d, %d)\n", tx, ty);
     }
 }
 
@@ -155,7 +167,7 @@ void CalculatorApp::processButtonPress(int buttonIndex) {
         case KeyType::OPERATOR: {
             char op = btn.getOperator();
             if (op != '\0') {
-                _logic.applyBinaryOp(op);
+                _logic.inputOperator(op);
             }
             break;
         }
@@ -168,20 +180,25 @@ void CalculatorApp::processButtonPress(int buttonIndex) {
             _logic.clearAll();
             break;
 
+        case KeyType::BACKSPACE:
+            _logic.backspace();
+            break;
+
         case KeyType::UNARY:
-            // Handle unary functions based on label
-            if (strcmp(label, "x2") == 0) {
+            if (strcmp(label, "!") == 0) {
+                _logic.factorial();
+            } else if (strcmp(label, "log2") == 0) {
+                _logic.log2();
+            } else if (strcmp(label, "x2") == 0) {
                 _logic.square();
-            } else if (strcmp(label, "^") == 0) {  // sqrt symbol
-                _logic.squareRoot();
             } else if (strcmp(label, "sin") == 0) {
                 _logic.sine();
             } else if (strcmp(label, "cos") == 0) {
                 _logic.cosine();
             } else if (strcmp(label, "tan") == 0) {
                 _logic.tangent();
-            } else if (strcmp(label, "+/-") == 0) {
-                _logic.negate();
+            } else {
+                Serial.printf("[UNARY] '%s' not implemented\n", label);
             }
             break;
 
