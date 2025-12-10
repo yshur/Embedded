@@ -40,10 +40,9 @@ LCDTouch::LCDTouch(WaveshareLCD& lcd, const TouchPins& pins)
 
 void LCDTouch::begin() {
     pinMode(_pins.cs, OUTPUT);
-    pinMode(_pins.irq, INPUT);
+    pinMode(_pins.irq, INPUT_PULLUP);
     pinMode(_pins.busy, INPUT);
 
-    digitalWrite(_pins.irq, HIGH);
     csHigh();
 
     _scanDir = _lcd.getScanDir();

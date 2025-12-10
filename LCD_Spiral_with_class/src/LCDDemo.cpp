@@ -67,6 +67,52 @@ static void drawEdge(int x1, int y1, int x2, int y2, COLOR color) {
     delay(200);
 }
 
+// Direct SPI read from touch controller (bypasses IRQ check)
+static bool readTouchDirect(int& outX, int& outY) {
+    uint16_t rawX = 0, rawY = 0;
+
+    SPI.endTransaction();
+    SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
+
+    digitalWrite(4, LOW);  // TP_CS low
+
+    // Read X (command 0xD0)
+    SPI.transfer(0xD0);
+    delayMicroseconds(200);
+    rawX = SPI.transfer(0x00);
+    rawX <<= 8;
+    rawX |= SPI.transfer(0x00);
+    rawX >>= 3;
+
+    // Read Y (command 0x90)
+    SPI.transfer(0x90);
+    delayMicroseconds(200);
+    rawY = SPI.transfer(0x00);
+    rawY <<= 8;
+    rawY |= SPI.transfer(0x00);
+    rawY >>= 3;
+
+    digitalWrite(4, HIGH);  // TP_CS high
+
+    SPI.endTransaction();
+    SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
+
+    // Check if touch is valid (values in reasonable range)
+    if (rawX > 100 && rawX < 4000 && rawY > 100 && rawY < 4000) {
+        // Convert raw to screen coordinates (for D2U_L2R scan direction)
+        // Using calibration factors from LCDTouch
+        float xFac = -0.132443f;
+        float yFac = 0.089997f;
+        int xOff = 516;
+        int yOff = -22;
+
+        outX = lcd.getWidth() - xFac * rawY - xOff;
+        outY = lcd.getHeight() - yFac * rawX - yOff;
+        return true;
+    }
+    return false;
+}
+
 // Returns:
 //   true  = finished filling the screen
 //   false = interrupted by touch ON the spiral
@@ -86,16 +132,15 @@ static bool drawSpiralGrow(COLOR color) {
     int stepInc = 2;
 
     while (!(left <= 0 && right >= W-1 && top <= 0 && bottom >= H-1)) {
+        int tx, ty;
+
         // right
         right = clampi(right + step, 0, W-1);
         drawEdge(left, top, right, top, color);
 
-        if (touch.scan()) {
-            int tx = touch.getX();
-            int ty = touch.getY();
+        if (readTouchDirect(tx, ty)) {
             bool onSpiral = isTouchOnSpiral(tx, ty);
-            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
-                          tx, ty, onSpiral ? "YES" : "NO");
+            Serial.printf("Touch at (%d, %d) - on spiral: %s\n", tx, ty, onSpiral ? "YES" : "NO");
             if (onSpiral) {
                 Serial.println(">>> RESETTING SPIRAL <<<");
                 return false;
@@ -106,12 +151,9 @@ static bool drawSpiralGrow(COLOR color) {
         bottom = clampi(bottom + step, 0, H-1);
         drawEdge(right, top, right, bottom, color);
 
-        if (touch.scan()) {
-            int tx = touch.getX();
-            int ty = touch.getY();
+        if (readTouchDirect(tx, ty)) {
             bool onSpiral = isTouchOnSpiral(tx, ty);
-            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
-                          tx, ty, onSpiral ? "YES" : "NO");
+            Serial.printf("Touch at (%d, %d) - on spiral: %s\n", tx, ty, onSpiral ? "YES" : "NO");
             if (onSpiral) {
                 Serial.println(">>> RESETTING SPIRAL <<<");
                 return false;
@@ -122,12 +164,9 @@ static bool drawSpiralGrow(COLOR color) {
         left = clampi(left - step, 0, W-1);
         drawEdge(right, bottom, left, bottom, color);
 
-        if (touch.scan()) {
-            int tx = touch.getX();
-            int ty = touch.getY();
+        if (readTouchDirect(tx, ty)) {
             bool onSpiral = isTouchOnSpiral(tx, ty);
-            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
-                          tx, ty, onSpiral ? "YES" : "NO");
+            Serial.printf("Touch at (%d, %d) - on spiral: %s\n", tx, ty, onSpiral ? "YES" : "NO");
             if (onSpiral) {
                 Serial.println(">>> RESETTING SPIRAL <<<");
                 return false;
@@ -138,12 +177,9 @@ static bool drawSpiralGrow(COLOR color) {
         top = clampi(top - step, 0, H-1);
         drawEdge(left, bottom, left, top, color);
 
-        if (touch.scan()) {
-            int tx = touch.getX();
-            int ty = touch.getY();
+        if (readTouchDirect(tx, ty)) {
             bool onSpiral = isTouchOnSpiral(tx, ty);
-            Serial.printf("Touch detected at (%d, %d) - on spiral: %s\n",
-                          tx, ty, onSpiral ? "YES" : "NO");
+            Serial.printf("Touch at (%d, %d) - on spiral: %s\n", tx, ty, onSpiral ? "YES" : "NO");
             if (onSpiral) {
                 Serial.println(">>> RESETTING SPIRAL <<<");
                 return false;

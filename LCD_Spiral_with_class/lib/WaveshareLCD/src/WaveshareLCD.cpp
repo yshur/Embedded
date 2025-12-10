@@ -103,8 +103,8 @@ void WaveshareLCD::writeReg(uint8_t reg) {
 void WaveshareLCD::writeData(uint8_t data) {
     dcData();
     csLow();
-    SPI.transfer(data >> 8);
-    SPI.transfer(data & 0xFF);
+    SPI.transfer(0x00);
+    SPI.transfer(data);
     csHigh();
 }
 
