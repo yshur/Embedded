@@ -3,13 +3,15 @@
 // GPIO pin numbers on the ESP32
 // LED_PIN = GPIO13  → controls both the onboard blue LED and your external LED
 // BTN_PIN = GPIO0   → the built-in button on the ESP32 board
-#define LED_PIN 13
+#define LED_ONBOARD 13
+#define LED_EXTERNAL 12
 #define BTN_PIN 0
 
 void setup() {
   // Configure the LED pin as OUTPUT:
   // This allows the ESP32 to drive voltage out (HIGH) or pull it to GND (LOW)
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(LED_ONBOARD, OUTPUT);
+  pinMode(LED_EXTERNAL, OUTPUT);
 
   // Configure the button pin as INPUT:
   // The button is wired on the board such that:
@@ -27,12 +29,22 @@ void loop() {
   //    Blink the LED every 1 second
   // If the button IS pressed (btnState == LOW):
   //    Turn the LED off
-  if (btnState == HIGH) {
-    digitalWrite(LED_PIN, HIGH); // turn LED on
-    delay(1000);                 // wait 1 second
-    digitalWrite(LED_PIN, LOW);  // turn LED off
-    delay(1000);                 // wait 1 second
+  if (btnState == LOW) {
+    digitalWrite(LED_ONBOARD, HIGH);  // turn LED on
+    digitalWrite(LED_EXTERNAL, HIGH);
+    delay(500);                       // wait 0.5 second
+
+    digitalWrite(LED_EXTERNAL, LOW);
+    delay(500);
+
+    digitalWrite(LED_ONBOARD, LOW);
+    digitalWrite(LED_EXTERNAL, HIGH);
+    delay(500);
+
+    digitalWrite(LED_EXTERNAL, LOW);
+    delay(500);
   } else {
-    digitalWrite(LED_PIN, LOW);  // ensure LED stays off
+    digitalWrite(LED_ONBOARD, LOW);  // ensure LED stays off
+    digitalWrite(LED_EXTERNAL, LOW);
   }
 }
