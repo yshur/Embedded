@@ -43,14 +43,13 @@ void scanI2C(void)
 void setup()
 {
     Serial.begin(115200);
-    while (!Serial)
+    while (!Serial) {
         delay(1);
+	}
 
-  Wire.begin();
+	Wire.begin();
 
-  scanI2C();
-
-
+	scanI2C();
 }
 
 void loop()
