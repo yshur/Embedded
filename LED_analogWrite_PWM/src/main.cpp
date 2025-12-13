@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
-// PWM LED on GPIO4
-#define LED_PIN 4
+// PWM LED on GPIO12
+#define LED_PIN 12
 
 void setup() {
   // Configure LED pin as OUTPUT for PWM
