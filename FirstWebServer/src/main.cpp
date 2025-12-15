@@ -2,10 +2,15 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
+#define AP
 #define LED_PIN 13
 
 const char* ssid     = "Yair";
 const char* password = "0545456527";
+
+// AP mode credentials
+const char* apSsid = "ESP32-Login";
+const char* apPass = "12345678"; 
 
 WebServer server(80);
 
@@ -115,10 +120,33 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+
+#ifdef AP
+  // --- Access Point mode ---
+  WiFi.mode(WIFI_AP);
+  bool ok = WiFi.softAP(apSsid, apPass);
+  Serial.println(ok ? "AP started" : "AP start failed");
+
+  Serial.print("AP SSID: ");
+  Serial.println(apSsid);
+  Serial.print("AP IP: ");
+  Serial.println(WiFi.softAPIP());   // בדרך כלל 192.168.4.1
+
+#else
+  // --- WiFi client (station) mode ---
+  WiFi.mode(WIFI_STA);
+  Serial.println("Connecting to WiFi...");
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) { delay(300); Serial.print("."); }
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(300);
+    Serial.print(".");
+  }
   Serial.println();
-  Serial.print("IP: "); Serial.println(WiFi.localIP());
+  Serial.println("WiFi connected!");
+  Serial.print("STA IP: ");
+  Serial.println(WiFi.localIP());
+#endif
 
   server.on("/", handleLoginPage);
   server.on("/login", handleLoginPost);
