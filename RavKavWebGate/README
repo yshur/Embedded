@@ -1,0 +1,78 @@
+# RavKav Web Gate
+
+ESP32-based NFC budget management system with web interface.
+
+## Overview
+
+This project simulates a public transport gate system using an ESP32, MFRC522 NFC reader, and a web portal for managing card budgets.
+
+## Hardware
+
+- ESP32 development board
+- MFRC522 RFID/NFC reader
+- Waveshare 3.5" TFT LCD (optional)
+
+## Web Server Modes
+
+The system supports two network modes:
+
+### 1. Station Mode (WiFi)
+Connects to an existing WiFi network.
+
+To configure, update the credentials in `src/secrets.h`:
+```cpp
+#define WIFI_SSID     "your_network"
+#define WIFI_PASS     "your_password"
+```
+
+### 2. Access Point Mode (AP)
+Creates its own WiFi network for direct connection.
+
+Default AP credentials:
+- SSID: `ESP32-Login`
+- Password: `12345678`
+
+## Web Portal
+
+Access the portal via the ESP32's IP address (displayed on screen or serial monitor).
+
+**Login credentials:**
+- Username: `admin`
+- Password: `1234`
+
+### Portal Functions
+
+| Endpoint | Function |
+|----------|----------|
+| `/ravkav/read` | Read and display the current budget from the NFC card |
+| `/ravkav/load` | Load a new budget value to the NFC card |
+
+## NFC Operation
+
+### GATE Mode (Default)
+The system operates in GATE mode by default:
+- Each card read decrements the budget by 1
+- Simulates passing through a transport gate
+
+### Budget Storage Format
+- Budget is stored with prefix `b=` to distinguish valid data from garbage values
+- Example: `b=100` stores a budget of 100
+- Maximum budget: **9999**
+
+## Project Structure
+
+```
+src/
+  main.cpp      - Main application code
+  secrets.h     - WiFi and login credentials
+lib/
+  WaveShare/    - LCD display wrapper
+  WaveshareLCD/ - LCD driver library
+```
+
+## Configuration
+
+Edit `src/secrets.h` to change:
+- WiFi credentials (SSID/password)
+- AP credentials
+- Web portal login (username/password)

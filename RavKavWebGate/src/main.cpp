@@ -6,24 +6,21 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-// #include "WaveShare.h"
+#include "WaveShare.h"
+#include "secrets.h"
 
-// WaveShare screen;
+WaveShare screen;
 
 // #define AP
 
-const char* ssid     = "Yair";
-const char* password = "0545456527";
+const char* ssid     = WIFI_SSID;
+const char* password = WIFI_PASS;
 
 // AP mode credentials
-const char* apSsid = "ESP32-Login";
-const char* apPass = "12345678"; 
+const char* apSsid = AP_SSID;
+const char* apPass = AP_PASS;
 
 WebServer server(80);
-
-// credentials for basic auth
-const char* OK_USER = "admin";
-const char* OK_PASS = "1234";
 
 bool loggedIn = false;
 
@@ -360,20 +357,20 @@ void handleRavkavLoad() {
   redirectToControl();
 }
 
-// void showLeftOnLCD(int budget) {
-//   screen.fillScreen(Colors::WHITE);
-//
-//   screen.drawTextCentered(0, 60, screen.getWidth(), 80,
-//                           "LEFT", &Font24,
-//                           Colors::WHITE, Colors::BLACK);
-//
-//   char buf[32];
-//   snprintf(buf, sizeof(buf), "%d", budget);
-//
-//   screen.drawTextCentered(0, 150, screen.getWidth(), 100,
-//                           buf, &Font24,
-//                           Colors::WHITE, Colors::BLACK);
-// }
+void showLeftOnLCD() {
+  screen.fillScreen(Colors::WHITE);
+
+  screen.drawTextCentered(0, 60, screen.getWidth(), 80,
+                          "LEFT", &Font24,
+                          Colors::WHITE, Colors::BLACK);
+
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d", lastBudget);
+
+  screen.drawTextCentered(0, 150, screen.getWidth(), 100,
+                          buf, &Font24,
+                          Colors::WHITE, Colors::BLACK);
+}
 
 void handleRavkavRead() {
   if (!loggedIn) { server.send(403, "text/plain", "Forbidden"); return; }
@@ -403,18 +400,9 @@ void handleRavkavRead() {
 void setup() {
 	Serial.begin(115200);		
 	while (!Serial);		// Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
-	SPI.begin();			// Init SPI bus
-	mfrc522.PCD_Init();		// Init MFRC522
-	delay(4);				// Optional delay. Some board do need more time after init to be ready, see Readme
-	mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
-	// Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
 
-  // screen.begin();
-  // screen.fillScreen(Colors::WHITE);
-  // screen.drawTextCentered(0, 0, screen.getWidth(), 80,
-  //                         "READY", &Font24,
-  //                         Colors::WHITE, Colors::BLACK);
-
+  // --- WiFi setup ---
+  Serial.println("Starting WiFi...");
 #ifdef AP
   // --- Access Point mode ---
   WiFi.mode(WIFI_AP);
@@ -451,6 +439,30 @@ void setup() {
   server.onNotFound([](){ server.send(404, "text/plain", "Not found"); });
 
   server.begin();
+
+  // --- MFRC522 and screen setup ---
+  Serial.println("Initializing MFRC522...");
+  SPI.begin();			// Init SPI bus
+  
+  screen.begin();
+  screen.fillScreen(Colors::WHITE);
+  screen.drawTextCentered(0, 20, screen.getWidth(), 30,
+                          "READY", &Font24,
+                          Colors::WHITE, Colors::BLACK);
+  screen.drawTextCentered(0, 60, screen.getWidth(), 30,
+                          "Load budget at:", &Font24,
+                          Colors::WHITE, Colors::BLACK);
+  screen.drawTextCentered(0, 100, screen.getWidth(), 30,
+                          WiFi.localIP().toString().c_str(), &Font24,
+                          Colors::WHITE, Colors::BLACK);
+
+  // Release SPI bus for MFRC522
+  SPI.endTransaction();
+
+	mfrc522.PCD_Init();		// Init MFRC522
+	delay(4);				// Optional delay. Some board do need more time after init to be ready, see Readme
+	mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
+  Serial.println("MFRC522 initialized.");
 }
 
 void loop() {
@@ -461,17 +473,32 @@ void loop() {
 
   // GATE mode: continuously check for cards and decrement budget
   bool ok;
-  int b = readBudget(ok);
+  lastBudget = readBudget(ok);
   delay(50);
 
   if (ok) {
-    if (!b) {
+    if (!lastBudget) {
       Serial.println("Denied: budget=0");
+
+      // Show the Denied message on LCD
+      screen.fillScreen(Colors::WHITE);
+      screen.drawTextCentered(0, 0, screen.getWidth(), 80,
+                          "Denied: budget=0", &Font24,
+                          Colors::WHITE, Colors::BLACK);
       return;
     }
-    while (!writeBudget(b - 1)) {
+    while (!writeBudget(lastBudget - 1)) {
       delay(100);
     }
-    Serial.printf("Entry OK. New budget=%d\n", b - 1);
+    lastBudget -= 1;
+    Serial.printf("Entry OK. New budget=%d\n", lastBudget);
+
+    // Show the new budget on LCD
+    char buf[32];
+    sprintf(buf, "Balance = %d ILS", lastBudget);
+    screen.fillScreen(Colors::WHITE);
+    screen.drawTextCentered(0, 0, screen.getWidth(), 80,
+                          buf, &Font24,
+                          Colors::WHITE, Colors::BLACK);
   }
 }
